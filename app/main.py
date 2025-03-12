@@ -5,7 +5,21 @@ import pandas as pd
 from .detector import predict_fraud, predict_bulk_fraud
 from .validate import validate_card
 
-app = FastAPI()
+from sqlalchemy.orm import Session
+from fastapi import Depends
+from .model import FraudTransaction
+from .database import get_db
+
+from app.database import init_db
+from contextlib import asynccontextmanager
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Lifespan event for startup and shutdown tasks."""
+    init_db()  # Create tables if they don't exist
+    yield  # Continue running the app
+
+app = FastAPI(lifespan=lifespan)
 
 # Single Transaction Prediction
 class Transaction(BaseModel):
@@ -35,17 +49,55 @@ class Transaction(BaseModel):
     cvv: str                    # CVV (required for card validation)
     is_fraud: Optional[bool] = None  # Optional fraud flag            # Fraud flag (for model prediction purposes)
 
+@app.get("/")
+def home():
+    return {"message": "Fraud Detection API is running!"}
+
 @app.post("/predict/")
-async def predict(transaction: Transaction):
+async def predict(transaction: Transaction, db: Session = Depends(get_db)):
     data = transaction.dict()
 
     # Validate the credit/debit card
     is_valid = validate_card(data["cc_num"], data["exp_month"], data["exp_year"], data["cvv"])
     if not is_valid:
+        fraud_entry = FraudTransaction(
+            trans_date_trans_time=data["trans_date_trans_time"],
+            cc_num=data["cc_num"],
+            merchant=data["merchant"],
+            category=data["category"],
+            amt=data["amt"],
+            city=data["city"],
+            state=data["state"],
+            unix_time=data["unix_time"],
+            merch_lat=data["merch_lat"],
+            merch_long=data["merch_long"],
+            reason="Invalid credit/debit card details",
+            is_fraud= True
+        )
+        db.add(fraud_entry)
+        db.commit()
         return {"prediction": "Fraud", "reason": "Invalid credit/debit card details"}
 
-    # Predict fraud if card is valid
     prediction = predict_fraud(data)
+
+    if prediction == "Fraud":
+        fraud_entry = FraudTransaction(
+            trans_date_trans_time=data["trans_date_trans_time"],
+            cc_num=data["cc_num"],
+            merchant=data["merchant"],
+            category=data["category"],
+            amt=data["amt"],
+            city=data["city"],
+            state=data["state"],
+            unix_time=data["unix_time"],
+            merch_lat=data["merch_lat"],
+            merch_long=data["merch_long"],
+            reason="Detected as fraudulent by AI model",
+            is_fraud= True
+        )
+        db.add(fraud_entry)
+        db.commit()
+
     return {"prediction": prediction}
 
 # Bulk Transaction Prediction
