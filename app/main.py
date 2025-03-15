@@ -137,3 +137,7 @@ async def predict_bulk(file: UploadFile = File(...)):
 
     except Exception as e:
         return {"error": str(e)}
+
+
+
+
