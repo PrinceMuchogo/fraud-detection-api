@@ -47,7 +47,7 @@ class Transaction(BaseModel):
     exp_month: int              # Expiration month (required for card validation)
     exp_year: int               # Expiration year (required for card validation)
     cvv: str                    # CVV (required for card validation)
-    is_fraud: Optional[bool] = None  # Optional fraud flag            # Fraud flag (for model prediction purposes)
+    is_fraud: Optional[bool] = None  # Optional fraud flag
 
 @app.get("/")
 def home():
@@ -72,7 +72,7 @@ async def predict(transaction: Transaction, db: Session = Depends(get_db)):
             merch_lat=data["merch_lat"],
             merch_long=data["merch_long"],
             reason="Invalid credit/debit card details",
-            is_fraud= True
+            is_fraud=True
         )
         db.add(fraud_entry)
         db.commit()
@@ -93,7 +93,7 @@ async def predict(transaction: Transaction, db: Session = Depends(get_db)):
             merch_lat=data["merch_lat"],
             merch_long=data["merch_long"],
             reason="Detected as fraudulent by AI model",
-            is_fraud= True
+            is_fraud=True
         )
         db.add(fraud_entry)
         db.commit()
@@ -138,6 +138,10 @@ async def predict_bulk(file: UploadFile = File(...)):
     except Exception as e:
         return {"error": str(e)}
 
+# Make sure the app uses the correct port
+if __name__ == "__main__":
+    import os
+    import uvicorn
 
-
-
+    port = int(os.getenv("PORT", 8000))  # Use Railway's assigned port or default to 8000
+    uvicorn.run("app.main:app", host="0.0.0.0", port=port)
