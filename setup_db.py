@@ -43,8 +43,8 @@ def setup_postgres():
         conn.close()
         
         # Now connect to the database and create tables
-        from app.db.database import engine
-        from app.db.model import Base
+        from app.database import engine
+        from app.model import Base
         
         print("Creating database tables...")
         Base.metadata.create_all(bind=engine)
