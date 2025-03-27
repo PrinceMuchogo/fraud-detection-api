@@ -103,6 +103,25 @@ async def predict(transaction: Transaction, db: Session = Depends(get_db)):
         db.refresh(fraud_entry)
         print(f"Saved Transaction: {fraud_entry.id}")
 
+    fraud = FraudTransaction(
+            trans_date_trans_time=datetime.strptime(data["trans_date_trans_time"], "%Y-%m-%d %H:%M:%S"),
+            cc_num=data["cc_num"],
+            merchant=data["merchant"],
+            category=data["category"],
+            amt=data["amt"],
+            city=data["city"],
+            state=data["state"],
+            unix_time=data["unix_time"],
+            merch_lat=data["merch_lat"],
+            merch_long=data["merch_long"],
+            reason="Valid credit/debit card details",
+            is_fraud=False
+        )
+    db.add(fraud)
+    db.flush()  # Ensure SQLAlchemy processes the insert
+    db.commit()
+    db.refresh(fraud)
+
     return {"prediction": prediction}
 
 # Bulk Transaction Prediction
