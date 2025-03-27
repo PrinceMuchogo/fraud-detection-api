@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 from fastapi import Depends
 from .model import FraudTransaction
 from .database import get_db
-
+from datetime import datetime
 from app.database import init_db
 from contextlib import asynccontextmanager
 
@@ -61,7 +61,7 @@ async def predict(transaction: Transaction, db: Session = Depends(get_db)):
     is_valid = validate_card(data["cc_num"], data["exp_month"], data["exp_year"], data["cvv"])
     if not is_valid:
         fraud_entry = FraudTransaction(
-            trans_date_trans_time=data["trans_date_trans_time"],
+            trans_date_trans_time=datetime.strptime(data["trans_date_trans_time"], "%Y-%m-%d %H:%M:%S"),
             cc_num=data["cc_num"],
             merchant=data["merchant"],
             category=data["category"],
@@ -75,14 +75,16 @@ async def predict(transaction: Transaction, db: Session = Depends(get_db)):
             is_fraud=True
         )
         db.add(fraud_entry)
+        db.flush()  # Ensure SQLAlchemy processes the insert
         db.commit()
+        db.refresh(fraud_entry)
         return {"prediction": "Fraud", "reason": "Invalid credit/debit card details"}
 
     prediction = predict_fraud(data)
 
     if prediction == "Fraud":
         fraud_entry = FraudTransaction(
-            trans_date_trans_time=data["trans_date_trans_time"],
+            trans_date_trans_time=datetime.strptime(data["trans_date_trans_time"], "%Y-%m-%d %H:%M:%S"),
             cc_num=data["cc_num"],
             merchant=data["merchant"],
             category=data["category"],
@@ -92,11 +94,14 @@ async def predict(transaction: Transaction, db: Session = Depends(get_db)):
             unix_time=data["unix_time"],
             merch_lat=data["merch_lat"],
             merch_long=data["merch_long"],
-            reason="Detected as fraudulent by AI model",
+            reason="Invalid credit/debit card details",
             is_fraud=True
         )
         db.add(fraud_entry)
+        db.flush()  # Ensure SQLAlchemy processes the insert
         db.commit()
+        db.refresh(fraud_entry)
+        print(f"Saved Transaction: {fraud_entry.id}")
 
     return {"prediction": prediction}
 
@@ -137,6 +142,29 @@ async def predict_bulk(file: UploadFile = File(...)):
 
     except Exception as e:
         return {"error": str(e)}
+    
+
+@app.get("/test-db/")
+def test_db(db: Session = Depends(get_db)):
+    test_entry = FraudTransaction(
+        trans_date_trans_time=datetime.utcnow(),
+        cc_num="1234567890123456",
+        merchant="Test Merchant",
+        category="Test",
+        amt=100.0,
+        city="Test City",
+        state="TS",
+        unix_time=1234567890,
+        merch_lat=0.0,
+        merch_long=0.0,
+        reason="Test Insert",
+        is_fraud=False
+    )
+    db.add(test_entry)
+    db.commit()
+    db.refresh(test_entry)
+    return {"success": True, "id": test_entry.id}
+
 
 # Make sure the app uses the correct port
 if __name__ == "__main__":
