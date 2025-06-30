@@ -55,74 +55,77 @@ def home():
 
 @app.post("/predict/")
 async def predict(transaction: Transaction, db: Session = Depends(get_db)):
-    data = transaction.dict()
+    try:
+        data = transaction.dict()
 
-    # Validate the credit/debit card
-    is_valid = validate_card(data["cc_num"], data["exp_month"], data["exp_year"], data["cvv"])
-    if not is_valid:
-        fraud_entry = FraudTransaction(
-            trans_date_trans_time=datetime.strptime(data["trans_date_trans_time"], "%Y-%m-%d %H:%M:%S"),
-            cc_num=data["cc_num"],
-            merchant=data["merchant"],
-            category=data["category"],
-            amt=data["amt"],
-            city=data["city"],
-            state=data["state"],
-            unix_time=data["unix_time"],
-            merch_lat=data["merch_lat"],
-            merch_long=data["merch_long"],
-            reason="Invalid credit/debit card details",
-            is_fraud=True
-        )
-        db.add(fraud_entry)
-        db.flush()  # Ensure SQLAlchemy processes the insert
+        # Validate the credit/debit card
+        is_valid = validate_card(data["cc_num"], data["exp_month"], data["exp_year"], data["cvv"])
+        if not is_valid:
+            fraud_entry = FraudTransaction(
+                trans_date_trans_time=datetime.strptime(data["trans_date_trans_time"], "%Y-%m-%d %H:%M:%S"),
+                cc_num=data["cc_num"],
+                merchant=data["merchant"],
+                category=data["category"],
+                amt=data["amt"],
+                city=data["city"],
+                state=data["state"],
+                unix_time=data["unix_time"],
+                merch_lat=data["merch_lat"],
+                merch_long=data["merch_long"],
+                reason="Invalid credit/debit card details",
+                is_fraud=True
+            )
+            db.add(fraud_entry)
+            db.flush()
+            db.commit()
+            db.refresh(fraud_entry)
+            return {"prediction": "Fraud", "reason": "Invalid credit/debit card details"}
+
+        prediction = predict_fraud(data)
+
+        if prediction == "Fraud":
+            fraud_entry = FraudTransaction(
+                trans_date_trans_time=datetime.strptime(data["trans_date_trans_time"], "%Y-%m-%d %H:%M:%S"),
+                cc_num=data["cc_num"],
+                merchant=data["merchant"],
+                category=data["category"],
+                amt=data["amt"],
+                city=data["city"],
+                state=data["state"],
+                unix_time=data["unix_time"],
+                merch_lat=data["merch_lat"],
+                merch_long=data["merch_long"],
+                reason="Invalid credit/debit card details",
+                is_fraud=True
+            )
+            db.add(fraud_entry)
+            db.flush()
+            db.commit()
+            db.refresh(fraud_entry)
+            print(f"Saved Transaction: {fraud_entry.id}")
+
+        fraud = FraudTransaction(
+                trans_date_trans_time=datetime.strptime(data["trans_date_trans_time"], "%Y-%m-%d %H:%M:%S"),
+                cc_num=data["cc_num"],
+                merchant=data["merchant"],
+                category=data["category"],
+                amt=data["amt"],
+                city=data["city"],
+                state=data["state"],
+                unix_time=data["unix_time"],
+                merch_lat=data["merch_lat"],
+                merch_long=data["merch_long"],
+                reason="Valid credit/debit card details",
+                is_fraud=False
+            )
+        db.add(fraud)
+        db.flush()
         db.commit()
-        db.refresh(fraud_entry)
-        return {"prediction": "Fraud", "reason": "Invalid credit/debit card details"}
+        db.refresh(fraud)
 
-    prediction = predict_fraud(data)
-
-    if prediction == "Fraud":
-        fraud_entry = FraudTransaction(
-            trans_date_trans_time=datetime.strptime(data["trans_date_trans_time"], "%Y-%m-%d %H:%M:%S"),
-            cc_num=data["cc_num"],
-            merchant=data["merchant"],
-            category=data["category"],
-            amt=data["amt"],
-            city=data["city"],
-            state=data["state"],
-            unix_time=data["unix_time"],
-            merch_lat=data["merch_lat"],
-            merch_long=data["merch_long"],
-            reason="Invalid credit/debit card details",
-            is_fraud=True
-        )
-        db.add(fraud_entry)
-        db.flush()  # Ensure SQLAlchemy processes the insert
-        db.commit()
-        db.refresh(fraud_entry)
-        print(f"Saved Transaction: {fraud_entry.id}")
-
-    fraud = FraudTransaction(
-            trans_date_trans_time=datetime.strptime(data["trans_date_trans_time"], "%Y-%m-%d %H:%M:%S"),
-            cc_num=data["cc_num"],
-            merchant=data["merchant"],
-            category=data["category"],
-            amt=data["amt"],
-            city=data["city"],
-            state=data["state"],
-            unix_time=data["unix_time"],
-            merch_lat=data["merch_lat"],
-            merch_long=data["merch_long"],
-            reason="Valid credit/debit card details",
-            is_fraud=False
-        )
-    db.add(fraud)
-    db.flush()  # Ensure SQLAlchemy processes the insert
-    db.commit()
-    db.refresh(fraud)
-
-    return {"prediction": prediction}
+        return {"prediction": prediction}
+    except Exception as e:
+        return {"error": str(e)}
 
 # Bulk Transaction Prediction
 @app.post("/predict-bulk/")
