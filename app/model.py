@@ -17,3 +17,4 @@ class FraudTransaction(Base):
     merch_long = Column(Float)
     reason = Column(String)
     is_fraud = Column(Boolean)
+    
